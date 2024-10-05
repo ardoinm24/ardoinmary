@@ -1,0 +1,32 @@
+---
+title: "Final Project"
+author: "Mary Ardoin"
+date: "4/5/2023"
+output: html_document
+---
+
+### Load Libraries
+The selection and use of all of these packages have their reasoning throughout the analysis. They will be individually explained as they become relevant.
+```{r}
+library(readr)
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
+library(dplyr)
+library(haven)
+library(kableExtra)
+```
+
+  This research project works to put a magnifying glass to the poverty cycle and use data science to try and visualize trends. Specifically, the goal is to effectively visualize trends in the data between the effect of financial stress on parenting and delinquency. Often times, we hear about the poverty cycle and its everyday consequences, but by observing and analyzing data, we can hope to come to real scientific conclusions. A hypothesis presented going into the analysis states: Parents that grew up on welfare are more likely to have financial strains later in life as well. Across states, we can see a similar trend continue in children in terms of delinquincy issues.
+  
+One of the first decisions that had to be made was what data to use. I used, "Welfare, Children, and Families: A Three-City Study". This data collection is a in a three wave intensive study over the years of 1999 to 2006 to assess the well-being of low-income children and families in the post-welfare reform era. Subjects consisted of a random sample of approximately 2,400 households with children in low-income neighborhoods in Boston, Chicago, and San Antonio. While there were three total waves, I primarily focused on the first wave for the majority of the analysis. 
+
+
+
+
+
+
+
+
+
+

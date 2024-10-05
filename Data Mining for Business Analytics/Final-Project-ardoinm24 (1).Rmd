@@ -1,0 +1,937 @@
+---
+title: "BUS 317 - Final Project"
+author: "Mary Ardoin"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+### Load Packages
+```{r load packages, message=FALSE}
+library(tidyverse)
+library(robotstxt)
+library(kableExtra)
+library(ggplot2)
+library(ggmap)
+library(tidygeocoder)
+library(maps)
+library(lubridate)
+library(gridExtra)
+library(knitr)
+library(RMySQL)
+library(ggrepel)
+options(ggrepel.max.overlaps = Inf)
+```
+
+
+### Scraping test
+```{r test if we have permission to web scrape}
+# Scraping setup
+# Checks to see if we can scrape data from ratebeer
+paths_allowed("https://www.ratebeer.com/")
+```
+
+
+
+### Question 1
+Use Octoparse to scrape the North Carolina breweries page for active breweries, meaderies, cideries, and sake producers.
+```{r north carolina breweries r script, eval=FALSE}
+# R script file to web scrape www.ratebeer.com
+
+# Load libraries
+library(tidyverse)
+
+# North Carolina Breweries Scraping Using Octoparse
+
+# Create a dataframe for each NC Octoparse file with properly formatted variable names
+nc_breweries <- read_csv("data/nc_breweries.csv")
+nc_meaderies <- read_csv("data/nc_meaderies.csv")
+nc_cideries <- read_csv("data/nc_cideries.csv")
+nc_sake_producers <- read_csv("data/nc_sake_producers.csv")
+
+# Create a single dataframe combining all 4 dataframes for North Carolina
+ncbreweries <- bind_rows(nc_breweries, 
+                          nc_meaderies,
+                          nc_cideries,
+                          nc_sake_producers)
+
+# Add state column to the combined dataframe
+ncbreweries <- ncbreweries %>% 
+  mutate(state = c("North Carolina"))
+
+# Write csv file to data folder
+write_csv(ncbreweries, file = "data/ncbreweries.csv")
+```
+
+
+
+### Question 2
+Repeat all the procedures in Question 1, but for the breweries in the state of California.
+```{r california breweries r script, eval=FALSE}
+# R script file to web scrape www.ratebeer.com
+
+# We already loaded tidyverse for the North Carolina breweries
+
+# California Breweries Scraping Using Octoparse
+
+# Create a dataframe for each California Octoparse file with properly formatted variable names
+ca_breweries <- read_csv("data/ca_breweries.csv")
+ca_meaderies <- read_csv("data/ca_meaderies.csv")
+ca_cideries <- read_csv("data/ca_cideries.csv")
+ca_sake_producers <- read_csv("data/ca_sake_producers.csv")
+
+# Create a single dataframe combining all 4 dataframes for California
+cabreweries <- bind_rows(ca_breweries,
+                         ca_meaderies,
+                         ca_cideries,
+                         ca_sake_producers)
+
+# Add state column to the combined dataframe
+cabreweries <- cabreweries %>% 
+  mutate(state = c("California"))
+
+# Write csv file to data folder
+write_csv(cabreweries, file = "data/cabreweries.csv")
+```
+
+
+### Load Data
+```{r breweries load data, message=FALSE}
+# Read in the two state dataframes created in the chunks above
+ncbreweries <- read_csv("data/ncbreweries.csv")
+cabreweries <- read_csv("data/cabreweries.csv")
+```
+
+
+### Question 3
+Create a single dataframe, named breweries, from the two state dataframes.  Be sure to save this dataframe as a csv file in your data folder, include the code in an appropriate code chunk.
+
+1. You are to clean up any data as necessary, see Lab 07, for one example.
+2. All variable names are to be in the proper format.
+3. You are to factor the type variable with all beer producer types appearing first, followed by meaderies, cideries, and sake producers.  However, contract and commercial breweries are to appear last. With the beer producers you are to determine the ranking within this group that makes the most sense for data visualizations.
+4. Be sure the beverage count is numeric.
+
+You are to inspect the breweries dataframe and display at least 20 rows of data, but present no more that 10 rows to the user at any one time.  You are to create data visualizations of the distribution of the data within each variable.
+```{r combine dataframes, eval=FALSE}
+# Create a single dataframe, named breweries, from the two state dataframes
+breweries <- bind_rows(ncbreweries, cabreweries)
+
+# Save the breweries dataframe as a csv in your data folder
+write_csv(breweries, file = "data/breweries.csv")
+```
+
+```{r clean and visualize breweries, message=FALSE}
+# Load data
+breweries <- read_csv("data/breweries.csv")
+
+# Clean up data
+glimpse(breweries)
+
+breweries <- breweries %>% 
+    mutate(established = ifelse(
+      name == "Edenton Brewing Company", 2003, established),
+      state = factor(state),
+      type = factor(type, levels = c(
+        "Microbrewery",
+        "Brewpub",
+        "Brewpub/Brewery",
+        "Client Brewer",
+        "Commissioner",
+        "Meadery",
+        "Cidery",
+        "Sake Producer",
+        "Commercial Brewery",
+        "Contract Brewery")),
+      beverage_count = as.numeric(str_trim(beverage_count)))
+
+# Inspect breweries dataframe
+glimpse(breweries)
+
+# Display data
+breweries %>% 
+  head(20) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "75%", height = "700px")
+
+# Data visualizations
+
+# Create a bar chart, showing the average beverage count by type of brewery. Which type has the highest? Which has the lowest?
+breweries %>% 
+  group_by(type) %>% 
+  summarise(mean_bev_count = mean(beverage_count)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x = reorder(type, mean_bev_count),
+             y = mean_bev_count)) +
+  geom_col(fill = type) +
+  geom_text(aes(label = round(mean_bev_count, 2)), vjust = 1.6, color = "white", size = 3.5) +
+  labs(title = "Mean Beverage Count by Brewery Type",
+       x = "Brewery Type",
+       y = "Mean Beverage Count")
+
+
+# Bar chart of type levels
+breweries %>% 
+  ggplot(mapping = aes(x = type)) +
+  geom_bar()
+
+# I THINK THESE 2 ARE A GOOD EFFORT BUT ASK AND SEE WHAT MY LOVELY SAYS AND USE DIRECT QUOTE
+```
+
+### Mapping Setup
+```{r mapping setup}
+# Mapping Setup
+register_google(key = "AIzaSyB14h_szuys3SaTv1WTaJ2WEDfGDN0sl-A")
+# Checks to see if the API key as been registered
+has_google_key()
+```
+
+
+
+### Question 4
+Update the breweries dataframe with the long and lat data for the cities in the dataframe.  You are to do this in the most efficient way possible.  Specifically, you are to look up the GPS location of a city once and only once by following the procedures discussed and demonstrated in class.  Note:  use the osm method for this question. 
+
+Inspect this dataframe and display at least 20 rows of data.
+
+Once this step has been successfully completed, you are to save the resulting dataframe as breweries_long_lat.csv in your data folder.  After the .csv is created, you are to do the following:
+
+1. Comment out all the code in the code chunk.
+2. You are to set the code chunk not be executed when knitted.  However, the contents of the code chunk are to be displayed.
+3. If you need to reload this data you are to use the .csv file to load the data.
+
+```{r breweries coordinates and new data frame, eval=FALSE}
+## Create coordinates and then comment out the code
+
+## Use osm method to update breweries dataframe
+# breweries_coords <- breweries %>%
+#   distinct(state, city)%>%
+#   mutate(location = paste(city, state, sep = ", ")) %>%
+#   tidygeocoder::geocode(location, method = "arcgis")
+# 
+# write_csv(breweries_coords, file = "data/breweries_coords.csv")
+
+## Create new datadrame by joining the coordinates with breweries
+# breweries_long_lat <- breweries %>% 
+#   inner_join(breweries_coords)
+# 
+## Write file to data folder
+# write_csv(breweries_long_lat, file = "data/breweries_long_lat")
+```
+
+
+```{r display breweries_long_lat, message=FALSE}
+# Load data
+breweries_coords <- read_csv("data/breweries_coords.csv")
+breweries_long_lat <- read_csv("data/breweries_long_lat")
+
+# Display resulting dataframe
+breweries_long_lat %>% 
+  head(20) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "100%", height = "700px")
+```
+
+
+### Question 5
+You are to create a set of side by side maps of the North Carolina and California using an appropriate map type that maps the total number of meaderies, cideries, and sake producers by city where the size of the dot is a relative indicator of the total number of brewers in each city by type of brewer. You are not to include any of the beer brewery types. The dot size scale should be the same on both maps.
+```{r breweries in nc and ca, message = FALSE, fig.height=7, fig.width=9}
+# Filter for brewery types except beer
+brewery_types <- c("Meadery", "Cidery", "Sake Producer")
+
+# Create new data frame with the number of each brewery type in each city
+breweries_by_city <- breweries %>% 
+  filter(type %in% brewery_types) %>% 
+  group_by(city, type) %>% 
+  summarize(num_breweries = n())
+
+# Join with map data to get coordinates
+brewery_map_data <- breweries_by_city %>% 
+  inner_join(breweries_coords, by = "city")
+
+# Create data frame for North Carolina
+nc_brewery_map_data <- brewery_map_data %>% 
+  filter(state == "North Carolina")
+
+# Create data frame for California
+ca_brewery_map_data <- brewery_map_data %>% 
+  filter(state == "California")
+
+# Plot map for North Carolina and specify details
+nc_plot <- get_map(
+  location = 'North Carolina', zoom = 6, 
+  source = "google", maptype = "roadmap") %>%
+  ggmap(base_layer = ggplot(
+    nc_brewery_map_data, aes(
+      x = long, y = lat, 
+      size = num_breweries, color = type))) +
+  geom_point(alpha = .75) +
+  labs(title = "Breweries by City in North Carolina", 
+       subtitle = "Size of dot represents relative number of breweries",
+       x = "Longitude", 
+       y = "Latitude", 
+       size = "Total Brewers", 
+       color = "Brewery Type")
+
+# Plot map for California and specify details
+ca_plot <- get_map(
+  location = 'California', zoom = 6, 
+  source = "google", maptype = "roadmap") %>%
+  ggmap(base_layer = ggplot(
+    ca_brewery_map_data, aes(
+      x = long, y = lat, 
+      size = num_breweries, color = type))) +
+  geom_point(alpha = .75) +
+  labs(title = "Breweries by City in California", 
+       subtitle = "Size of dot represents relative number of breweries",
+       x = "Longitude", 
+       y = "Latitude", 
+       size = "Total Brewers", 
+       color = "Brewery Type")
+
+# display side-by-side maps
+grid.arrange(nc_plot, ca_plot, ncol = 2)
+
+```
+
+
+### Question 6
+You are to create a set of side by side zoomed maps of the Los Angels and San Francisco metro areas (see Wikipedia) using an appropriate map type where you map the total number of beer brewery types, exclude contract and commercial breweries, by city in each metro area.  The dots are to be color coded by brewery type.   The size of the dot is be relative to the total number of brewers by type in each city.  The size scale should be the same on all maps.
+```{r breweries in la vs sf, message=FALSE, fig.height=7, fig.width=9}
+# Filter for beer brewery types - contract & commercial
+beer_breweries <- c("Microbrewery",
+                    "Brewpub",
+                    "Brewpub/Brewery",
+                    "Client Brewer",
+                    "Commissioner")
+
+# Create new data frame with the number of each brewery type in each city
+california_beer_breweries <- breweries %>% 
+ filter(type %in% beer_breweries,
+        state == "California") %>%
+  group_by(city, type) %>% 
+  summarize(num_breweries = n())
+
+# Join with map data to get coordinates
+beer_brewery_map_data <- california_beer_breweries %>% 
+  inner_join(breweries_coords, by = "city")
+
+# Plot map of Los Angeles and define specifics
+la_beer_map <-
+  get_map(location = "Los Angeles, California", zoom = 9,
+          source = "google", maptype = "roadmap") %>% 
+ ggmap(base_layer = ggplot(
+    beer_brewery_map_data, aes(
+      x =long, y = lat, size = num_breweries, color = type))) +
+  geom_point(alpha = .75) +
+  scale_size(range = c(2, 15)) +
+  labs(title = "Los Angeles Metro Area")
+
+# Plot map of San Francisco and define specifics
+sf_beer_map <-
+  get_map(location = "San Francisco, California", zoom = 9,
+          source = "google", maptype = "roadmap") %>% 
+  ggmap(base_layer = ggplot(
+    beer_brewery_map_data, aes(
+      x =long, y = lat, size = num_breweries, color = type))) +
+  geom_point(alpha = .75) +
+  scale_size(range = c(2, 15)) + 
+  labs(title = "San Francisco Metro Area")
+
+# display side-by-side maps
+grid.arrange(la_beer_map, sf_beer_map, ncol = 2, nrow = 1)
+```
+
+
+### Question 7
+Note:  The below cannot be accomplished in a single pipe.  To do this successfully, you will need multiple pipes and multiple code chunks.  You are to write your code as succinctly as possible.   
+
+The following analysis is only to be done only for cities in California that have 10 or more breweries, excluding contract and commercial breweries.
+
+For breweries in these cities, you are to use Octoparse to extract each of the brewery’s address information from the brewery’s detailed page.  You can get to this page manually by clicking on the name of the brewery on the list of breweries page.  For instance the address of  13 Point Brewing in California is 8035 Broadway, Lemon Grove, California, 91945, United States.
+
+This process can be automated in Octoparse by using the Batch URL Input method.  Follow the instructions carefully in this tutorial,  You should use the first method in the tutorial, Import URLs from a file.  You should export a list URLs  as a .csv file of breweries for which you need addresses. All your work in R should be documented and run in a code chunk. When you create the file of scraped addresses in Octoparse be sure you also output the name of the brewery for each address, as you will need a way to join the file to existing dataframes.
+
+Import this file into your data folder and create a dataframe, ca_addresses, containing this data.  Update this dataframe with the long and lat data for each address in the dataframe. Use the census method instead of osm for this question  It is considerably faster. With the census method you only need to use the address argument.  The address argument is the full address, e.g. 2350 Hendersonville Rd, Arden, North Carolina, 28704, United States.
+
+Note some address may have errors that return an NA when the GPS coordinates are looked up.  It may be due to a misspelling of a word such suite.  An address that appends a unit location to the address number, such as 141-b will return an NA.  To clean up remove the “-b”.  A few addresses may just not be found. You are to clean up the address data the best you can.  You need to document these efforts. Once you have a clean ca_addresses dataframe, output all the data in so that the user can scroll or click through the data while displaying only 10 to 15 rows at a time.
+
+Once the above has been successfully completed, you are to save the resulting dataframe as ca_addresses.csv in your data folder.  After the .csv is created, you are to do the following:
+
+1. Comment out all the code in the code chunk.
+2. You are to set the code chunk not be executed when knitted.  However, the contents of the code chunk are to be displayed.
+3. If you need to reload this data you are to use the .csv file to load the data.
+
+Now for the reason we are doing the above.  In many cities, craft breweries of all types seem to be located in the same geographic area.  Our goal is to determine the city with the highest concentration of breweries relative to one another and then generate a map of the city indicating the location of each brewery and its type.
+
+In a new code chunk you will need to determine the distance of each brewery to the other breweries in the city.  You should not use an anti join to accomplish this as the problem is different from a similar problem we worked on in the past.  An inner join would be a more efficient choice.  Next you need to calculate the mean distance between all breweries in each city.  Do not include breweries that are joined to themselves in the calculation. You are to display all your results.  The city with the highest concentration of breweries is to be at the top of the list.
+
+Finally, you are to produce a zoomed map of the city that shows the location of each brewery included in mean distance calculation and its type.  Extra points if you also display the name of the brewery on the map. The map should be as large as possible.
+```{r extract URLs of breweries in cities that have 10 or more breweries}
+# Filter breweries to those in California with 10 or more non-commercial/non-contract breweries
+ca_breweries <- breweries %>%
+  filter(state == "California", 
+         type != "Commercial", 
+         type != "Contract") %>%
+  group_by(city) %>%
+  summarize(num_breweries = n()) %>%
+  filter(num_breweries >= 10)
+
+# Extract URLs for each brewery in the filtered cities
+ca_brewery_urls <- breweries %>%
+  filter(city %in% ca_breweries$city) %>%
+  select(url)
+
+# Export URLs as a CSV file
+write_csv(ca_brewery_urls, file = "data/ca_brewery_urls.csv")
+```
+
+```{r geocode adress data and clean, eval=FALSE}
+ca_addresses <- read_csv("data/ca_addresses.csv")
+
+ca_addresses <- ca_addresses %>%
+  rename(
+    name = Text,
+    address = Text1) %>% 
+  mutate(address = str_replace(address, "-b", ""))
+
+ca_addresses_coords <- ca_addresses %>% 
+  mutate(location = geo_census(address),
+         latitude = ifelse(is.na(location$lat), NA, location$lat),
+         longitude = ifelse(is.na(location$lon), NA, location$lon)) %>%
+  select(-location) %>%
+  unnest(c(latitude, longitude))
+
+
+#write_csv(ca_addresses, file = "data/ca_addresses.csv")
+```
+
+
+### Database Connection
+```{r database connection to sql}
+db = dbConnect(MySQL(), 
+     user = 'ofx_user', 
+     password = 'TestyTester#2021', 
+     dbname = 'ofx', 
+     host = 'ballenger.wlu.edu')
+
+knitr::opts_knit$set(sql.max.print = -1)
+```
+
+
+### Load Data
+```{r extract data from SQL database tables}
+# load product table
+rs_product <- dbSendQuery(db, "SELECT * FROM product")
+# fetch product results
+product <- fetch(rs_product, n = -1)
+
+# load category table
+rs_category <- dbSendQuery(db, "SELECT * FROM category")
+# fetch category results
+category <- fetch(rs_category, n = -1)
+
+# load buyer table
+rs_buyer <- dbSendQuery(db, "SELECT * FROM buyer")
+# fetch buyer results
+buyer <- fetch(rs_buyer, n = -1)
+
+# load orders table
+rs_orders <- dbSendQuery(db, "SELECT * FROM orders")
+# fetch orders results
+orders <- fetch(rs_orders, n = -1)
+
+# load location table
+rs_location <- dbSendQuery(db, "SELECT * FROM location")
+# fetch location results
+location <- fetch(rs_location, n = -1)
+
+# load order_product table
+rs_order_product <- dbSendQuery(db, "SELECT * FROM order_product")
+# fetch order_product results
+order_product <- fetch(rs_order_product, n = -1)
+```
+
+
+### Combine SQL data innto one dataframw
+```{r creating one data framee}
+#Start by creating athe first element of the dataframe, buyer + orders
+order_buyer <- orders %>% 
+  inner_join(buyer)
+
+# Add the other tables loaded to the dataframme
+ofx <- order_buyer %>% 
+  inner_join(location) %>% 
+  inner_join(order_product) %>% 
+  inner_join(product) %>% 
+  inner_join(category)
+
+# view the resulting dataframe
+ofx %>% 
+  head(20) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "100%", height = "700px")
+```
+
+
+### Geocoding Location Data
+You are to manage your use of geocoding location data.  You are to gather the geocoding data for each state & city combination and save it as a csv file in your data folder in your RStudio Cloud project.  You should only need to do this once.  Subsequent reloading of your geocoding & location data is to be done using the saved csv file.
+```{r geocoding office express data, eval=FALSE}
+# Comment out code after it has been run once
+ofx_coords <- ofx %>% 
+  distinct(City, State) %>% 
+  geocode(city = City, state = State)
+
+# Write to csv
+write_csv(ofx_coords, file = "data/ofx_coords.csv")
+
+# I NEED TO RUN THIS
+```
+
+
+```{r load and join location data with df, message=FALSE}
+# Load ofx coordinate data
+ofx_coords <- read_csv("data/ofx_coords.csv")
+
+# Load location data into df
+ofx <- ofx %>% 
+  inner_join(ofx_coords)
+
+# Display ofx df with location data
+ofx %>% 
+  head(20) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "100%", height = "700px")
+```
+
+
+### The Assignment
+You have been hired as a data analytics consultant by OFX.  Your engagement letter states your are to probe into the provided OFX data to see what business intelligence you can uncover.  You are to clean up the data and column names as necessary. You are to inspect the data and conduct graphical exploratory data analysis (EDA).  You are to document these efforts and write a brief description (2 to 4 sentences) of each pertinent finding.
+
+Next you are to explore and analyze the data contained in the database and provide at least 6 key findings which may be summarized data tables and/or data visualizations.  A single finding might consist of multiple tables and data visualizations.  Your are to write a brief description of your findings.  Be sure each finding is clearly labeled.
+
+
+### Inspecting the dataframe
+```{r ofx insoection}
+# General functions to get a look at the dataframe and see if there's anything that stounds out or any issues that need to be fixed
+ofx %>% 
+  glimpse() %>% 
+  summary() 
+```
+
+
+### Cleaning the data
+```{r clean ofx df}
+# Make all variable names lowercase
+ofx <- ofx %>% 
+  rename_with(tolower) %>% 
+  # convert the date variables to date format
+  mutate(order_date = ymd(order_date),
+         ship_date = ymd(ship_date),
+         # convert postal code to a numeric value
+         postal_code = as.numeric(postal_code),
+         # factor categorical data
+         # THIS IS DEBATABLE
+         ship_mode = factor(ship_mode),
+         type = factor(type),
+         region = factor(region),
+         sub_category = factor(sub_category),
+         category = factor(category))
+
+# Display changes made to the dataframe
+ofx %>% 
+  glimpse()
+```
+
+
+### Checking for NAs
+```{r check for nas}
+# Checks for NAs for all columns and totals the number found in each column 
+ofx %>% 
+  summarise(across(everything(), ~ sum(is.na(.)))) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+
+### Graphical Exploratory Data Analysis
+
+A monthly order volume would be a great place to start. It could help identify any seasonality or trends in the order volume, as well as any outliers or unusual patterns.
+```{r monthly order volume EDA}
+unsure whether to keep this one or not
+
+ofx %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>% 
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = order_date_month, y = nbr_orders)) +
+  geom_point() +
+  geom_line() +
+  geom_smooth() +
+  labs(title = "Number of Order within each Month",
+       x = "Date",
+       y = "Number of Orders")
+```
+From this graph, we can see that over time the number of orders has increased.
+
+
+Which category has the most orders
+```{r eda2}
+ofx %>% 
+  group_by(category) %>% 
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = category, y = nbr_orders)) +
+  geom_col()+
+  theme_economist()+
+  labs(title = "Number of Orders for Each Category",
+       x = "Category",
+       y = "Number of Orders")
+```
+
+Where did the orders ship??
+```{r}
+ofx_size <- ofx %>% 
+  group_by(city, state) %>% 
+  count(city)
+
+ofx_size <- ofx_size %>% 
+  inner_join(ofx_coords)
+
+get_map(location = 'usa', zoom = 4, source = 'google', maptype = "roadmap") %>% 
+  ggmap(base_layer = ggplot(ofx_size, aes(x = long, y = lat, alpha = 0.7, size = n)))+
+  geom_point(color = "blue")+
+  theme_void()+
+  scale_size_continuous(name = "Number of Orders")+
+  labs(title = "Total Number of Orders by City")
+```
+
+
+
+```{r visualize distribution of profits}
+ofx %>% 
+  ggplot(aes(x = profit)) +
+  geom_histogram(binwidth = 100) +
+  scale_x_continuous(labels = scales::dollar_format()) +
+  theme_economist() +
+  labs(title = "Distribution of Profit", 
+       x = "Profit", 
+       y = "Count")
+
+```
+
+
+```{r compare sales by month for different product categories}
+ofx %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month, category) %>% 
+  summarise(total_sales = sum(sale_price)) %>% 
+  ggplot(aes(x = order_date_month, y = total_sales, color = category)) +
+  geom_line() +
+  theme_economist() +
+  labs(title = "Total Sales by Month for Different Product Categories", 
+       x = "Date", 
+       y = "Total Sales", 
+       color = "Category")
+
+```
+
+
+```{r investigate the relationship between price and profit}
+ofx %>% 
+  ggplot(aes(x = price, y = profit)) +
+  geom_point(alpha = 0.5) +
+  scale_x_continuous(labels = scales::dollar_format()) +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  theme_economist() +
+  labs(title = "Relationship between Price and Profit", 
+       x = "Price", 
+       y = "Profit")
+
+```
+
+
+```{r compare profit margins by product category}
+ofx %>% 
+  group_by(category) %>% 
+  summarise(margin = mean(profit/sale_price)) %>% 
+  ggplot(aes(x = reorder(category, margin), y = margin)) +
+  geom_col() +
+  theme_economist() +
+  labs(title = "Average Profit Margin by Product Category", 
+       x = "Category", 
+       y = "Profit Margin")
+
+```
+
+
+```{r visualize the geographic distribution of sales}
+ofx %>% 
+  inner_join(location, by = "order_id") %>% 
+  group_by(state) %>% 
+  summarise(total_sales = sum(sale_price)) %>% 
+  left_join(us_states, by = c("state" = "state_name")) %>% 
+  ggplot(aes(fill = total_sales)) +
+  geom_sf() +
+  scale_fill_viridis_c(option = "magma") +
+  theme_void() +
+  labs(title = "Geographic Distribution of Sales", 
+       fill = "Total Sales")
+
+```
+
+
+### Key Finding 1
+What products or categories of products are under performing?
+
+First, we are going to look at the number of sales for each product sub-category. The reason for using sub-categories rather than individual products is that each sub-category of a product has many variations and it would be unnecessary to compare different size stacks of paper as an example.
+```{r}
+ofx %>% 
+  group_by(sub_category) %>% 
+  ggplot(aes(x = sub_category)) +
+  geom_bar()+
+  theme_economist()+
+  theme(axis.text.x=element_text(angle = -60, hjust = 0))+
+  labs(title = "Number of Sales by General Product Type",
+       x = "General Product Type",
+       y = "Number of Sales")
+```
+Binders and paper are OFX’s biggest sellers, while copiers and machines are OFX’s lowest sellers so they are most likely under performing compared to everything else, but further analysis is needed. However, we need to look at the profit margins for each category to get a better look a how each product is performing.
+
+Now we are going to look each products gross profit per unit to get a better understanding for how each product is performing.
+```{r}
+ofx %>% 
+  group_by(sub_category) %>% 
+  summarise(avg_grs_profit = mean(gross_profit_per_unit)) %>% 
+  ggplot(aes(x = sub_category, y = avg_grs_profit))+
+  geom_col()+
+  theme_economist()+
+  theme(axis.text.x=element_text(angle = -60, hjust = 0))+
+  labs(title = "Average Gross Profit per Unit by Product Type",
+       x = "General Product Type",
+       y = "Mean Gross Profit per Unit")
+```
+After looking at this graph, it is obvious that copiers are not under performing. While they have the least amount of sales, they have the highest average gross profit by far. However, I have concluded that machines are the highest under performing product sub-category sold by OFX. Machines have the second least amount of sales and an extremely low mean gross profit as a product. Also, tables are the second most under performing product at OFX. OFX is losing money on average for each table sold.
+
+
+### Key Finding 2
+Are there seasonality effects on the firm or groups of products?
+
+```{r}
+ofx %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>%
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = order_date_month, y = nbr_orders))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Number of Orders each Month with trend line",
+       x = "Date",
+       y = "Number of Orders")
+```
+
+This graph shows that at the end of each year, the number of sales drops drastically.
+
+Now lets look at the same thing but for each category of product.
+
+```{r}
+# first look at the technology category
+ofx %>% 
+  filter(category == "Technology") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>%
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = order_date_month, y = nbr_orders))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Number of Orders each Month for Tech Products",
+       x = "Date",
+       y = "Number of Orders")
+```
+
+```{r}
+# look at the furniture category
+ofx %>% 
+  filter(category == "Furniture") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>%
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = order_date_month, y = nbr_orders))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Number of Orders each Month for Furniture Products",
+       x = "Date",
+       y = "Number of Orders")
+```
+
+```{r}
+ofx %>% 
+  filter(category == "Office Supplies") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>%
+  summarise(nbr_orders = n()) %>% 
+  ggplot(aes(x = order_date_month, y = nbr_orders))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Number of Orders each Month for Office Supply Products",
+       x = "Date",
+       y = "Number of Orders")
+```
+
+I have come to the conclusion that there are seasonal affects on the firm. Each category of products observes a decline in the number of sales at the beginning of each year. My suggestion to OFX is to provide incentives of sales during this down time.
+
+
+### Key Finding 3
+What products generate the most revenue for OFX?
+
+```{r}
+ofx %>% 
+  group_by(product_name) %>% 
+  summarise(revenue = mean(quantity*unit_price),
+            sub_category = sub_category,
+            category = category) %>% 
+  arrange(desc(revenue)) %>% 
+  head(15) %>% 
+  kable() %>% 
+  kable_styling()
+```
+
+The products that generate the most revenue per product for OFX are copiers and printers. While as a product they generate the most revenue per unit sold, copiers and printers are difficult to sell in mass quantities.
+
+Next, I am going to look at the total revenue generated by each product to see which product contributes to the company the most.
+
+```{r}
+ofx %>% 
+  group_by(product_name) %>% 
+  summarise(revenue = sum(quantity*unit_price),
+            sub_category = sub_category,
+            category = category) %>% 
+  arrange(desc(revenue)) %>% 
+  head(20) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "100%", height = "400px")
+```
+As we can see from the table, copiers are still at the top of the list for providing the most gross revenue to the firm. However, after looking at total revenue generated, binders are close to the top of the list for generating the most gross revenue for the firm.
+
+
+### Key Finding 4
+What are the profiles of a typical customer for OFX?
+
+First, I’m going to look at the distribution of types of consumers.
+
+```{r}
+ofx %>% 
+  ggplot(aes(x = type))+
+  geom_bar()+
+  theme_economist()+
+  labs(title = "Distribution of Customer Types",
+       x = "Customer Type",
+       y = "Number of Customers")
+```
+Looking at this plot, most of OFX’s customers are the regular, everyday consumer type, making up over half of their customers. Corporate customers are their second largest customer type. Understanding who OFX sells to a majority of the time helps them get a grasp of how to persuade people and companies to buy their product.
+
+
+### Key Finding 5
+What product correlates the most with profit?
+
+I will look at what products have the highest gross profit when no discount is given.
+
+```{r}
+ofx %>% 
+  filter(discount == 0) %>% 
+  group_by(sub_category) %>% 
+  summarise(gross_profit_from_product = sum(gross_profit_per_unit*quantity)) %>% 
+  arrange(desc(gross_profit_from_product)) %>% 
+  kable() %>% 
+  kable_styling() %>% 
+  scroll_box(width = "100%", height = "400px")
+```
+This table shows the gross profit to the company from each product in a descending order. Copiers and binders provide the company with the most gross profit, and because this is their largest profit generator they should focus on selling and promoting those items.
+
+
+### Key Finding 6
+How has gross profit for OFX changed over time?
+
+```{r}
+ofx %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>% 
+  summarise(gp_month = sum(quantity*gross_profit_per_unit)) %>% 
+  ggplot(aes(x = order_date_month, y = gp_month))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Gross Profit for OFX each month",
+       x = "Date",
+       y = "Gross Profit in Dollars")
+
+```
+
+Over time, the gross profit margin for OFX has grown. However, the firm has experienced two different months of negative gross profit margins after making a jump the previous month. The upward sloping trend line is a good sign that the firm is growing. However around the end of 2013 and the beginning of 2014, the gross profit margins were not as stable and were jumping up and down. T This is suggesting some instability in the firm during those months.
+
+Now, lets look at the break down of each product’s category.
+
+```{r}
+ofx %>% 
+  filter(category == "Technology") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>% 
+  summarise(gp_month = sum(quantity*gross_profit_per_unit)) %>% 
+  ggplot(aes(x = order_date_month, y = gp_month))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Gross Profit for Technology each month",
+       x = "Date",
+       y = "Gross Profit in Dollars")
+```
+
+```{r}
+ofx %>% 
+  filter(category == "Office Supplies") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>% 
+  summarise(gp_month = sum(quantity*gross_profit_per_unit)) %>% 
+  ggplot(aes(x = order_date_month, y = gp_month))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Gross Profit for Office Supplies each month",
+       x = "Date",
+       y = "Gross Profit in Dollars")
+```
+
+```{r}
+ofx %>% 
+  filter(category == "Furniture") %>% 
+  mutate(order_date_month = round_date(order_date, unit = "month")) %>% 
+  group_by(order_date_month) %>% 
+  summarise(gp_month = sum(quantity*gross_profit_per_unit)) %>% 
+  ggplot(aes(x = order_date_month, y = gp_month))+
+    geom_point()+
+    geom_line()+
+  geom_smooth()+
+  theme_economist()+
+  labs(title = "Gross Profit for Furniture each month",
+       x = "Date",
+       y = "Gross Profit in Dollars")
+```
+
+After comparing these three graphs, I have concluded that furniture is the weakest product category for OFX. Furniture has 17 months with negative gross profit margins, while Office Supplies and Technology have 6 months combined. Also technology and office supplies have upward sloping trend lines, whereas furniture has a flat trend line. This means that the furniture category products are being left behind and under performing drastically when compared to the rest of the products. Furthermore, furniture’s monthly gross profit margins only broke the $2,000 mark twice.
+
+
+CAN STILL LOOK AT THE QUESTION:
+WHAT CORRELATES WITH PROFIT>
+ARE THERE ISSUES WITH CERTAIN PRODUCT LINES, PRODUCTS, MARKETS, PRICING STRUCTURES (MARGINS), COSTS, ETC.?

@@ -1,6 +1,6 @@
 ---
 title: "final_proj"
-author: "Lauren Fowler"
+author: "Mary Ardoin & Lauren Fowler"
 date: "4/11/2024"
 output: pdf_document
 ---
